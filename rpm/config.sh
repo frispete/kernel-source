@@ -8,7 +8,7 @@ COMPRESS_VMLINUX="xz"
 # Compile binary devicetrees on master and stable branches.
 BUILD_DTBS="Yes"
 # Generate a _multibuild file
-MULTIBUILD="Yes"
+MULTIBUILD="No"
 # Use new style livepatch package names
 LIVEPATCH=livepatch
 # buildservice projects to build the kernel against

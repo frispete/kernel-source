@@ -239,6 +239,63 @@ def get_package_archs(package_tar_up_dir, limit_packages=None):
 
 # here starts the new compute-PATCHVERSION.py implementation
 
+def parse_makefiles(diff_text):
+    """Locate changes to the toplevel Makefile in a unified diff file
+    return applied changesets to the linux kernel version variables"""
+    # match top level Makefile
+    makefile_target = re.compile(r'''
+        ^                   # Anchor a start of line
+        (---|\+\+\+)        # Match either +++ or ---
+        \s+                 # Skip blinks
+        (?P<path>[^\/]+/Makefile)   # Extract Makefile with single slash
+        ( |\t|$)            # May end in a blank, tab or end of line
+    ''', re.VERBOSE)
+    # match variable change pattern
+    var_pattern = re.compile(r'''
+        ^                   # Anchor at start of line
+        \+                  # Required: we care about additions ('+') only
+        \s*                 # Skip optional blanks
+        (?P<key>VERSION|PATCHLEVEL|SUBLEVEL|EXTRAVERSION)   # Required: key value is one of these
+        \s*=\s*             # Required: assignment with optional blanks
+        (?P<value>.*)       # Required: any value, even an empty one
+    ''', re.VERBOSE)
+
+    in_makefile = False
+    changes = []
+
+    for line in diff_text.splitlines():
+        if line.startswith(('--- ', '+++ ')):
+            match = makefile_target.match(line)
+            if match:
+                # we're in a toplevel Makefile diff section now
+                in_makefile = True
+                current_file = match.group('path')
+                vout(4, 'parse_makefiles: {}'.format(current_file))
+            else:
+                # we're in some other files modification context
+                in_makefile = False
+
+        if not in_makefile:
+            continue
+
+        if line.startswith((' ', '@@')):
+            continue
+
+        # extract version variable changes
+        match = var_pattern.match(line)
+        if match:
+            changes.append(
+                {
+                    # which variable (and avoid shouting loudly)
+                    'variable': match.group('key').lower(),
+                    # added (new) or removed (old) value
+                    'value': match.group('value').strip(),
+                }
+            )
+
+    return changes
+
+
 if __name__ == "__main__":
     import os
     import sys
@@ -321,63 +378,6 @@ if __name__ == "__main__":
                 patches.append(patch)
 
         return patches
-
-
-    def parse_makefiles(diff_text):
-        """Locate changes to the toplevel Makefile in a unified diff file
-        return applied changesets to the linux kernel version variables"""
-        # match top level Makefile
-        makefile_target = re.compile(r'''
-            ^                   # Anchor a start of line
-            (---|\+\+\+)        # Match either +++ or ---
-            \s+                 # Skip blinks
-            (?P<path>[^\/]+/Makefile)   # Extract Makefile with single slash
-            ( |\t|$)            # May end in a blank, tab or end of line
-        ''', re.VERBOSE)
-        # match variable change pattern
-        var_pattern = re.compile(r'''
-            ^                   # Anchor at start of line
-            \+                  # Required: we care about additions ('+') only
-            \s*                 # Skip optional blanks
-            (?P<key>VERSION|PATCHLEVEL|SUBLEVEL|EXTRAVERSION)   # Required: key value is one of these
-            \s*=\s*             # Required: assignment with optional blanks
-            (?P<value>.*)       # Required: any value, even an empty one
-        ''', re.VERBOSE)
-
-        in_makefile = False
-        changes = []
-
-        for line in diff_text.splitlines():
-            if line.startswith(('--- ', '+++ ')):
-                match = makefile_target.match(line)
-                if match:
-                    # we're in a toplevel Makefile diff section now
-                    in_makefile = True
-                    current_file = match.group('path')
-                    vout(4, 'parse_makefiles: {}'.format(current_file))
-                else:
-                    # we're in some other files modification context
-                    in_makefile = False
-
-            if not in_makefile:
-                continue
-
-            if line.startswith((' ', '@@')):
-                continue
-
-            # extract version variable changes
-            match = var_pattern.match(line)
-            if match:
-                changes.append(
-                    {
-                        # which variable (and avoid shouting loudly)
-                        'variable': match.group('key').lower(),
-                        # added (new) or removed (old) value
-                        'value': match.group('value').strip(),
-                    }
-                )
-
-        return changes
 
 
     def compute(basedir, patchdir):

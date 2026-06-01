@@ -1,4 +1,5 @@
 from kutil.config import read_config_sh, get_kernel_project_package, list_files, list_specs, get_kernel_projects, get_package_archs
+from git_sort import pathlib_compat
 from pathlib import Path
 import subprocess
 import tempfile
@@ -114,8 +115,7 @@ class TestComputePatchversion(unittest.TestCase):
         self.tmpdir = None
 
     def run_pipeline(self, cmd, cwd, expect_error=False):
-        cmd = [str(arg) for arg in cmd]
-        pipe = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, cwd=str(cwd))
+        pipe = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, cwd=cwd)
         out, err = pipe.communicate()
         if err and not expect_error:
             print(cmd, err)

@@ -344,7 +344,7 @@ if __name__ == "__main__":
             exit(1, 'patches basedir {} not found'.format(basedir))
 
         # fetch key, value pairs from config.sh
-        config = read_config_sh('rpm')
+        config = read_config_sh(os.path.dirname(sys.argv[0]))
         vout(2, 'config.sh: {}'.format(config))
 
         # determine kernel base source code version

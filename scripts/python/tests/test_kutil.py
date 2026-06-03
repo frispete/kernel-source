@@ -140,7 +140,7 @@ class TestComputePatchversion(unittest.TestCase):
 
     def test_empty(self):
         def test_fn(pipe, out, err):
-            # script retruns 0 and prints .0.0, not a desirable outcome, not tested
+            # script returns 0 and prints .0.0, not a desirable outcome, not tested
             self.assertTrue(b'config.sh' in err)
         self.run_test(test_fn, True)
 
@@ -148,7 +148,7 @@ class TestComputePatchversion(unittest.TestCase):
         self.config_sh.write_text('SRCVERSION=1.2')
 
         def test_fn(pipe, out, err):
-            # script retruns 0 and prints .0.0, not a desirable outcome, not tested
+            # script returns 0 and prints .0.0, not a desirable outcome, not tested
             self.assertTrue(b'series.conf' in err)
         self.run_test(test_fn, True)
 
@@ -190,6 +190,18 @@ patches.suse/no_extraversion.diff
         self.config_sh.write_text('SRCVERSION=1.2')
         self.series_conf.write_text('''
 +unused patches.suse/sublevel_4
+''')
+
+        def test_fn(pipe, out, err):
+            self.assertEqual(0, pipe.returncode)
+            self.assertEqual(b'1.2.0', out.strip())
+            self.assertEqual(b'', err)
+        self.run_test(test_fn)
+
+    def test_other_guarded(self):
+        self.config_sh.write_text('SRCVERSION=1.2')
+        self.series_conf.write_text('''
+-unused patches.suse/sublevel_4
 ''')
 
         def test_fn(pipe, out, err):

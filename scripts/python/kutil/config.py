@@ -82,7 +82,7 @@ def read_source_timestamp(directory):
     return config
 
 class SrcVersion:
-    """Class, defining a source code version allows parsing from string, updating single values
+    """Class, defining a source code version, allows parsing from string, updating single values
     and returns the resulting version as string repr"""
     def __init__(self, version_str):
         self.version = '0'
@@ -292,6 +292,7 @@ def parse_makefiles(diff_text):
     return changes
 
 
+
 if __name__ == "__main__":
     import sys
     import getopt
@@ -316,7 +317,7 @@ if __name__ == "__main__":
         license = __license__
         loglevel = 0
         basedir = '.'
-        patches = '.'
+        patchdir = '.'
 
     def stdout(*msg):
         print(*msg, file = sys.stdout, flush = True)
@@ -337,6 +338,22 @@ if __name__ == "__main__":
             stderr(__doc__.format(**gpar.__dict__))
         sys.exit(ret)
 
+    def parse_series_conf(series_conf, basedir, patchdir):
+        pipe = subprocess.Popen(['grep', '-o', '^[ \t]*patches[.][^ \t#]*', series_conf],
+                                stdout=subprocess.PIPE, stderr=subprocess.PIPE, cwd=basedir)
+        patches, errors = pipe.communicate()
+        if pipe.returncode == 2:
+            raise RuntimeError('%s\n%s' % (pipe.args, errors))
+        if gpar.loglevel >= 4:
+            plist = [p.decode().strip() for p in patches.splitlines()]
+            vout(4, 'patches: {}'.format(len(plist)))
+
+        pipe = subprocess.Popen(['xargs', 'grep', '-lE', '^[+][+][+][^/]+/Makefile'],
+                                stdin=subprocess.PIPE, stdout=subprocess.PIPE, cwd=gpar.patchdir)
+        patches = [p.decode() for p in pipe.communicate(input=patches)[0].splitlines()]
+        vout(4, 'Makefile patches: {}'.format(len(patches)))
+        return patches
+
     def compute(basedir, patchdir):
         """Compute patchversion from config.sh, series.conf and patch files"""
         ret = 0
@@ -353,29 +370,18 @@ if __name__ == "__main__":
 
         # fetch patch files from series.conf
         series_conf = os.path.join(basedir, 'series.conf')
-        pipe = subprocess.Popen(['grep', '-o', '^[ \t]*patches[.][^ \t#]*', series_conf],
-                                stdout=subprocess.PIPE, stderr=subprocess.PIPE, cwd=basedir)
-        patches, errors = pipe.communicate()
-        if pipe.returncode == 2:
-            raise RuntimeError('%s\n%s' % (pipe.args, errors))
-
-        vout(4, 'patches: {}'.format(patches))
-        pipe = subprocess.Popen(['xargs', 'grep', '-lE', '^[+][+][+][^/]+/Makefile'],
-                                stdin=subprocess.PIPE, stdout=subprocess.PIPE, cwd=patchdir)
-        patches = [p.decode() for p in pipe.communicate(input=patches)[0].splitlines()]
-        vout(4, 'patches: {}'.format(patches))
+        patches = parse_series_conf(series_conf, basedir, patchdir)
 
         # collect top level Makefile changesets from patch files
         changes = []
-        for pfn in patches:
-            pfn = os.path.join(patchdir, pfn)
-            with open(pfn, 'r') as f:
+        for patch in patches:
+            patch = os.path.join(patchdir, patch)
+            with open(patch, 'r') as f:
                 patch_data = f.read()
-                if 'Makefile' in patch_data:
-                    changeset = parse_makefiles(patch_data)
-                    if changeset:
-                        vout(2, 'parse_matches: {}: {}'.format(pfn, changeset))
-                        changes.append(changeset)
+                changeset = parse_makefiles(patch_data)
+                if changeset:
+                    vout(2, 'parse_matches: {}: {}'.format(patch, changeset))
+                    changes.append(changeset)
 
         # iterate over all changesets, and apply them
         for changeset in changes:
@@ -410,14 +416,14 @@ if __name__ == "__main__":
             elif opt in ('-b', '--basedir'):
                 gpar.basedir = par
             elif opt in ('-p', '--patches'):
-                gpar.patches = par
+                gpar.patchdir = par
 
         # ignore broken pipe errors (SIGPIPE)
         signal.signal(signal.SIGPIPE, signal.SIG_DFL)
 
         vout(3, 'started with pid {pid} in {appdir}'.format(**gpar.__dict__))
         try:
-            return compute(gpar.basedir, gpar.patches)
+            return compute(gpar.basedir, gpar.patchdir)
         except (ValueError, IOError) as exc:
             stderr('Sorry, we hit a snag: {}'.format(exc))
             return 1
